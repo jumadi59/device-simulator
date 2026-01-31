@@ -1,8 +1,9 @@
 {
+  "main": "dist/index.js",
   "scripts": {
-    "start": "npx ts-node src/device-simulator.ts --serial SN-TEST-000235",
-    "build": "tsc -p tsconfig.json",
-    "simulate": "node dist/device-simulator.js --serial SN-TEST-000235"
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts"
   },
   "dependencies": {
     "mqtt": "^5.14.1",
