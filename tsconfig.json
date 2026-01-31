@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",                   // Target output JS
+    "module": "CommonJS",                 // Modul system Node.js
+    "strict": true,                       // Strict type checking
+    "esModuleInterop": true,              // Interop default export
+    "outDir": "dist",                     // Hasil kompilasi JS
+    "rootDir": "src",                     // Direktori kode TS
+    "resolveJsonModule": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*"]
+}
