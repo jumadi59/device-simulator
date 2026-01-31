@@ -1,6 +1,8 @@
 {
   "scripts": {
-    "start": "npx ts-node device-simulator.ts --serial SN-TEST-000235"
+    "start": "npx ts-node src/device-simulator.ts --serial SN-TEST-000235",
+    "build": "tsc -p tsconfig.json",
+    "simulate": "node dist/device-simulator.js --serial SN-TEST-000235"
   },
   "dependencies": {
     "mqtt": "^5.14.1",
