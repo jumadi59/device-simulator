@@ -19,6 +19,7 @@ import { createMqttResponse, executeCommand } from "@/lib/executor";
 import { connectMqttRuntime } from "@/lib/mqtt-client";
 import { useSimulatorStore } from "@/lib/store";
 import type { AgentCommand, CommandSource, DeviceProfile, MqttJob } from "@/lib/types";
+import { handleAndroidSideEffect } from "@/modules/android-device-shell/services/androidCommandBridge";
 
 function applyEnrollment(device: DeviceProfile, data: Awaited<ReturnType<typeof enrollWithToken>>) {
   return {
@@ -33,10 +34,10 @@ function applyEnrollment(device: DeviceProfile, data: Awaited<ReturnType<typeof 
     },
     mqtt: {
       ...device.mqtt,
-      host: data.mqttConfig?.host?.startsWith("ssl://") ? appConfig.mqttUrl : data.mqttConfig?.host ?? device.mqtt.host,
-      clientId: data.mqttConfig?.clientId ?? device.serialNumber,
-      username: data.mqttConfig?.username ?? device.mqtt.username,
-      password: data.mqttConfig?.password ?? device.mqtt.password,
+      host: data.mqttConfig?.host?.startsWith("ssl://") ? appConfig.mqttUrl : data.mqttConfig?.host || device.mqtt.host || appConfig.mqttUrl,
+      clientId: data.mqttConfig?.clientId || device.mqtt.clientId || device.serialNumber,
+      username: data.mqttConfig?.username || device.mqtt.username || appConfig.mqttUsername,
+      password: data.mqttConfig?.password || device.mqtt.password || appConfig.mqttPassword,
     },
   };
 }
@@ -47,6 +48,57 @@ function commandIdentity(command: AgentCommand) {
 
 function commandType(command: AgentCommand) {
   return command.type ?? command.job ?? "unknown_job";
+}
+
+function objectPayload(payload: unknown): Record<string, unknown> {
+  return typeof payload === "object" && payload !== null && !Array.isArray(payload) ? (payload as Record<string, unknown>) : {};
+}
+
+function applyCommandSideEffects(
+  target: DeviceProfile,
+  source: "mqtt" | "rest" | "manual",
+  type: string,
+  payload: unknown,
+  updateDevice: ReturnType<typeof useSimulatorStore.getState>["updateDevice"],
+) {
+  const parsed = objectPayload(payload);
+  if (type === "push_notification") {
+    const title =
+      typeof parsed.message === "string" && parsed.message.length > 0
+        ? parsed.message
+        : typeof parsed.title === "string"
+          ? parsed.title
+          : "MDM Notification";
+    const content =
+      typeof parsed.content === "string" && parsed.content.length > 0
+        ? parsed.content
+        : typeof parsed.message === "string"
+          ? parsed.message
+          : "New agent notification";
+    updateDevice(target.id, {
+      notifications: [
+        {
+          id: randomId("notif"),
+          title,
+          message: title,
+          content,
+          createdAtIso: new Date().toISOString(),
+          source,
+        },
+        ...(target.notifications ?? []),
+      ].slice(0, 8),
+    });
+  }
+
+  if (type === "lock_device") {
+    const lock = parsed.lock;
+    updateDevice(target.id, { locked: typeof lock === "boolean" ? lock : String(lock) === "true" });
+  }
+
+  if (type === "open_app") {
+    const packageName = parsed.packageName ?? parsed.package_name;
+    if (typeof packageName === "string") updateDevice(target.id, { activeApp: packageName });
+  }
 }
 
 export function useDeviceRuntime(deviceId: string) {
@@ -92,9 +144,16 @@ export function useDeviceRuntime(deviceId: string) {
       await new Promise((resolve) => window.setTimeout(resolve, result.status === "EXECUTED" ? 1000 : 350));
       await submitCommandResult(target, id, finalStatus, finalPayload, mockMode);
       updateCommand(target.id, id, { status: finalStatus, response: finalPayload });
+      if (finalStatus !== "FAILED") applyCommandSideEffects(target, source, type, command.payload ?? {}, updateDevice);
+      handleAndroidSideEffect({
+        deviceId: target.id,
+        commandType: type,
+        payload: command.payload ?? {},
+        status: finalStatus === "FAILED" ? "FAILED" : "SUCCESS",
+      });
       addLog(target.id, finalStatus === "FAILED" ? "error" : "success", `Command ${type} ${finalStatus.toLowerCase()}`, finalPayload);
     },
-    [addLog, mockMode, recordCommand, updateCommand],
+    [addLog, mockMode, recordCommand, updateCommand, updateDevice],
   );
 
   const runMqttJob = useCallback(
@@ -125,6 +184,13 @@ export function useDeviceRuntime(deviceId: string) {
       publish?.(response);
       updateCommand(target.id, commandId, { status: result.status, response: result.payload });
       updateDevice(target.id, { lastMqttAt: new Date().toISOString() });
+      if (result.status !== "FAILED") applyCommandSideEffects(target, "mqtt", type, job.payload ?? {}, updateDevice);
+      handleAndroidSideEffect({
+        deviceId: target.id,
+        commandType: type,
+        payload: job.payload ?? {},
+        status: result.status === "FAILED" ? "FAILED" : result.status === "EXECUTED" ? "EXECUTED" : "SUCCESS",
+      });
       addLog(target.id, result.status === "FAILED" ? "error" : "success", `MQTT ${type} ${result.status.toLowerCase()}`, response);
     },
     [addLog, recordCommand, updateCommand, updateDevice],
@@ -141,7 +207,11 @@ export function useDeviceRuntime(deviceId: string) {
         if (!latest) return;
         void runMqttJob(latest, job, mqttRef.current?.publishResponse);
       },
-      (level, message, detail) => addLog(device.id, level, message, detail),
+      (level, message, detail) => {
+        if (message === "MQTT_CONNECTED") updateDevice(device.id, { mqttConnected: true });
+        if (message === "MQTT_DISCONNECTED") updateDevice(device.id, { mqttConnected: false });
+        addLog(device.id, level, message, detail);
+      },
     );
     setDeviceState(device.id, "online");
 
@@ -149,7 +219,7 @@ export function useDeviceRuntime(deviceId: string) {
       mqttRef.current?.disconnect();
       mqttRef.current = null;
     };
-  }, [addLog, device?.id, device?.mqtt.host, device?.serialNumber, device?.state, mockMode, runMqttJob, setDeviceState]);
+  }, [addLog, device?.id, device?.mqtt.host, device?.serialNumber, device?.state, mockMode, runMqttJob, setDeviceState, updateDevice]);
 
   useEffect(() => {
     if (!device || !device.tokens.accessToken) return;

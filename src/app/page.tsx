@@ -2,13 +2,13 @@
 
 import {
   Activity,
-  BatteryCharging,
   Bell,
   Cable,
   CheckCircle2,
   Clock3,
   DatabaseZap,
   FileUp,
+  HardDrive,
   MonitorSmartphone,
   Plus,
   Power,
@@ -16,7 +16,6 @@ import {
   Router,
   Send,
   Server,
-  Smartphone,
   TerminalSquare,
   Trash2,
   Wifi,
@@ -27,6 +26,8 @@ import { appConfig } from "@/lib/config";
 import { useSimulatorStore } from "@/lib/store";
 import { useDeviceRuntime } from "@/hooks/use-device-runtime";
 import type { DeviceProfile, LogLevel } from "@/lib/types";
+import { AndroidDeviceFrame } from "@/modules/android-device-shell/ui/AndroidDeviceFrame";
+import { AndroidScreen } from "@/modules/android-device-shell/ui/AndroidScreen";
 
 const commandSamples: Record<string, unknown> = {
   ping: {},
@@ -53,6 +54,14 @@ const commandSamples: Record<string, unknown> = {
   reboot: {},
   health_printer: {},
   share_screen: {},
+  push_dialog: {
+    "title": "Perhatian",
+    "message": "Terminal akan restart dalam 5 menit.",
+    "banner": "https://cdn.example.com/warning.png",
+    "cancelable": true,
+    "timeoutMs": 30000,
+    "buttonText": "Mengerti"
+  }
 };
 
 const logTone: Record<LogLevel, string> = {
@@ -89,6 +98,7 @@ export default function Home() {
   const { device, actions } = useDeviceRuntime(activeDeviceId);
   const [selectedCommand, setSelectedCommand] = useState("ping");
   const [payloadText, setPayloadText] = useState(JSON.stringify(commandSamples.ping, null, 2));
+  const [activityTab, setActivityTab] = useState<"history" | "logs">("history");
 
   const activeDevice = device ?? devices[0];
 
@@ -98,21 +108,21 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen px-4 py-5 md:px-8">
-      <section className="mx-auto flex max-w-7xl flex-col gap-5">
-        <header className="flex flex-col gap-4 rounded-md border border-slate-200 bg-white/85 p-4 shadow-sm backdrop-blur md:flex-row md:items-center md:justify-between">
+    <main className="h-screen overflow-hidden p-3 md:p-4">
+      <section className="mx-auto grid h-full max-w-[1600px] grid-rows-[auto_minmax(0,1fr)] gap-3">
+        <header className="flex min-h-0 items-center justify-between rounded-md border border-slate-200 bg-white/90 px-4 py-3 shadow-sm backdrop-blur">
           <div>
-            <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
               <MonitorSmartphone className="h-4 w-4" />
               MDM Agent Simulator
             </div>
-            <h1 className="mt-1 text-2xl font-semibold text-slate-950">Browser terminal lab for REST and MQTT agent flows</h1>
+            <h1 className="mt-0.5 text-lg font-semibold text-slate-950 md:text-xl">REST, MQTT, and Android shell simulator lab</h1>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
               onClick={() => setMockMode(!mockMode)}
-              className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium ${
+              className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-medium ${
                 mockMode ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-700"
               }`}
             >
@@ -122,7 +132,7 @@ export default function Home() {
             <button
               type="button"
               onClick={addDevice}
-              className="inline-flex items-center gap-2 rounded-md bg-slate-950 px-3 py-2 text-sm font-medium text-white"
+              className="inline-flex items-center gap-2 rounded-md bg-slate-950 px-3 py-2 text-xs font-medium text-white"
             >
               <Plus className="h-4 w-4" />
               Device
@@ -130,20 +140,20 @@ export default function Home() {
           </div>
         </header>
 
-        <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
-          <aside className="flex flex-col gap-4">
-            <section className="rounded-md border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="grid min-h-0 gap-3 xl:grid-cols-[280px_minmax(360px,1fr)_430px]">
+          <aside className="flex min-h-0 flex-col gap-3 overflow-hidden">
+            <section className="min-h-0 rounded-md border border-slate-200 bg-white p-3 shadow-sm">
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-slate-900">Devices</h2>
                 <span className="text-xs text-slate-500">{devices.length} active</span>
               </div>
-              <div className="flex flex-col gap-2">
+              <div className="max-h-[32vh] space-y-2 overflow-auto pr-1 scrollbar-thin">
                 {devices.map((item) => (
                   <button
                     type="button"
                     key={item.id}
                     onClick={() => setActiveDevice(item.id)}
-                    className={`rounded-md border p-3 text-left transition ${
+                    className={`w-full rounded-md border p-2.5 text-left transition ${
                       item.id === activeDeviceId ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
                     }`}
                   >
@@ -170,14 +180,15 @@ export default function Home() {
               </button>
             </section>
 
-            {activeDevice ? <EndpointPanel device={activeDevice} /> : null}
+            {activeDevice ? <EndpointPanel device={activeDevice} updateDevice={updateDevice} /> : null}
+            {activeDevice ? <MiniStatusPanel device={activeDevice} /> : null}
           </aside>
 
           {activeDevice ? (
-            <div className="grid gap-5 xl:grid-cols-[minmax(390px,460px)_minmax(0,1fr)]">
-              <DeviceShell device={activeDevice} />
+            <>
+              <DeviceShell />
 
-              <div className="flex flex-col gap-5">
+              <aside className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3 overflow-hidden">
                 <ControlPanel
                   device={activeDevice}
                   actions={actions}
@@ -187,10 +198,9 @@ export default function Home() {
                   setPayloadText={setPayloadText}
                   updateCommand={updateCommand}
                 />
-                <CommandHistory device={activeDevice} />
-                <LogPanel device={activeDevice} />
-              </div>
-            </div>
+                <ActivityPanel device={activeDevice} activityTab={activityTab} setActivityTab={setActivityTab} />
+              </aside>
+            </>
           ) : null}
         </div>
       </section>
@@ -198,91 +208,91 @@ export default function Home() {
   );
 }
 
-function EndpointPanel({ device }: { device: DeviceProfile }) {
+function EndpointPanel({
+  device,
+  updateDevice,
+}: {
+  device: DeviceProfile;
+  updateDevice: (id: string, patch: Partial<Omit<DeviceProfile, "id" | "logs" | "commandHistory">>) => void;
+}) {
   return (
-    <section className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="mb-3 text-sm font-semibold text-slate-900">Connection</h2>
-      <div className="space-y-3 text-sm">
+    <section className="rounded-md border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-slate-900">Connection</h2>
+        <button
+          type="button"
+          onClick={() =>
+            updateDevice(device.id, {
+              mqtt: {
+                ...device.mqtt,
+                host: appConfig.mqttUrl,
+                clientId: device.mqtt.clientId || device.serialNumber,
+                username: appConfig.mqttUsername,
+                password: appConfig.mqttPassword,
+              },
+            })
+          }
+          className="rounded border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
+          title="Apply MQTT URL, username, and password from env"
+        >
+          Apply env
+        </button>
+      </div>
+      <div className="space-y-2 text-sm">
         <InfoRow icon={<Server className="h-4 w-4" />} label="MDM" value={appConfig.mdmHost} />
         <InfoRow icon={<FileUp className="h-4 w-4" />} label="Upload" value={appConfig.uploadHost} />
         <InfoRow icon={<Router className="h-4 w-4" />} label="MQTT" value={device.mqtt.host || appConfig.mqttUrl} />
+        <InfoRow icon={<DatabaseZap className="h-4 w-4" />} label="MQTT auth" value={`${device.mqtt.username || appConfig.mqttUsername ? "username set" : "username empty"} / ${device.mqtt.password || appConfig.mqttPassword ? "password set" : "password empty"}`} />
         <InfoRow icon={<Cable className="h-4 w-4" />} label="Topics" value={`terminal, mdm/${device.serialNumber}`} />
       </div>
     </section>
   );
 }
 
-function DeviceShell({ device }: { device: DeviceProfile }) {
-  const memory = device.metrics.ram.used_mem_in_percentage;
+function MiniStatusPanel({ device }: { device: DeviceProfile }) {
   const storage = device.metrics.storage.storage_percentage;
+  const memory = device.metrics.ram.used_mem_in_percentage;
+
   return (
-    <section className="mx-auto w-full max-w-[460px] max-h-[740px] rounded-[32px] bg-terminal-ink p-4 shadow-device">
-      <div className="rounded-[24px] border border-white/10 bg-[#0c1117] p-3">
-        <div className="mb-3 flex items-center justify-between px-2 text-xs text-slate-300">
-          <span>{device.brand} Secure EDC</span>
-          <div className="flex items-center gap-2">
-            <Wifi className="h-3.5 w-3.5 text-terminal-cyan" />
-            <BatteryCharging className="h-4 w-4 text-terminal-lime" />
-            <span>{Math.round(device.metrics.battery_percentage)}%</span>
-          </div>
-        </div>
-        <div className="rounded-[18px] bg-[#101820] p-4 text-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs uppercase text-slate-400">Serial number</div>
-              <div className="font-mono text-lg font-semibold">{device.serialNumber}</div>
-            </div>
-            <div className={`rounded-full px-3 py-1 text-xs font-semibold ${device.locked ? "bg-rose-500/20 text-rose-200" : "bg-emerald-500/20 text-emerald-200"}`}>
-              {device.locked ? "LOCKED" : "READY"}
-            </div>
-          </div>
-
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            <MetricTile label="Battery" value={`${Math.round(device.metrics.battery_percentage)}%`} tone="lime" />
-            <MetricTile label="Latency" value={`${device.metrics.connection.latency} ms`} tone="cyan" />
-            <MetricTile label="Memory" value={`${memory}%`} tone="amber" />
-            <MetricTile label="Storage" value={`${storage}%`} tone="slate" />
-          </div>
-
-          <div className="mt-5 rounded-md border border-white/10 bg-white/5 p-3">
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              <Smartphone className="h-4 w-4 text-terminal-cyan" />
-              {device.activeApp ?? "com.pax.launcher"}
-            </div>
-            <div className="mt-2 text-xs leading-5 text-slate-300">
-              Firmware {device.metrics.firmware}
-              <br />
-              MDM Agent {device.metrics.mdm_version}
-              <br />
-              IP {device.metrics.connection.private_ip}
-            </div>
-          </div>
-
-          <div className="mt-5 grid grid-cols-3 gap-2">
-            {["F1", "F2", "F3", "MENU", "OK", "BACK", "1", "2", "3", "4", "5", "6", "7", "8", "9"].map((key) => (
-              <div key={key} className="flex h-10 items-center justify-center rounded-md bg-slate-800 text-xs font-semibold text-slate-200">
-                {key}
-              </div>
-            ))}
-          </div>
-        </div>
+    <section className="rounded-md border border-slate-200 bg-white p-3 shadow-sm">
+      <h2 className="mb-2 text-sm font-semibold text-slate-900">Live Status</h2>
+      <div className="grid grid-cols-2 gap-2">
+        <StatusTile icon={<Activity className="h-4 w-4" />} label="Battery" value={`${Math.round(device.metrics.battery_percentage)}%`} />
+        <StatusTile icon={<Wifi className="h-4 w-4" />} label="Signal" value={`${device.metrics.connection.connection_level}/5`} />
+        <StatusTile icon={<HardDrive className="h-4 w-4" />} label="Storage" value={`${storage}%`} />
+        <StatusTile icon={<DatabaseZap className="h-4 w-4" />} label="Memory" value={`${memory}%`} />
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+        <span className={`rounded-md px-2 py-1 text-center font-semibold ${device.tokens.accessToken ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+          REST {device.tokens.accessToken ? "ready" : "idle"}
+        </span>
+        <span className={`rounded-md px-2 py-1 text-center font-semibold ${device.mqttConnected ? "bg-cyan-50 text-cyan-700" : "bg-slate-100 text-slate-500"}`}>
+          MQTT {device.mqttConnected ? "online" : "offline"}
+        </span>
       </div>
     </section>
   );
 }
 
-function MetricTile({ label, value, tone }: { label: string; value: string; tone: "lime" | "cyan" | "amber" | "slate" }) {
-  const tones = {
-    lime: "text-terminal-lime",
-    cyan: "text-terminal-cyan",
-    amber: "text-terminal-amber",
-    slate: "text-slate-100",
-  };
+function StatusTile({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <div className="rounded-md border border-white/10 bg-white/5 p-3">
-      <div className="text-xs text-slate-400">{label}</div>
-      <div className={`mt-1 font-mono text-lg font-semibold ${tones[tone]}`}>{value}</div>
+    <div className="rounded-md border border-slate-100 bg-slate-50 p-2">
+      <div className="flex items-center gap-1.5 text-[11px] uppercase text-slate-500">
+        {icon}
+        {label}
+      </div>
+      <div className="mt-1 font-mono text-sm font-semibold text-slate-900">{value}</div>
     </div>
+  );
+}
+
+function DeviceShell() {
+  return (
+    <section className="flex min-h-0 items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-slate-950/90 p-3 shadow-sm">
+      <AndroidDeviceFrame className="h-full max-h-[calc(100vh-112px)]">
+        <AndroidScreen />
+      </AndroidDeviceFrame>
+    </section>
   );
 }
 
@@ -306,13 +316,13 @@ function ControlPanel({
   const canUseToken = Boolean(device.tokens.accessToken);
   const tokenShort = device.tokens.accessToken ? `${device.tokens.accessToken.slice(0, 18)}...` : "not issued";
   return (
-    <section className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <section className="rounded-md border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-slate-900">Agent Controls</h2>
           <p className="mt-1 text-xs text-slate-500">Token: {tokenShort}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 gap-1.5">
           <IconButton label="Bootstrap" icon={<Power className="h-4 w-4" />} onClick={actions.bootstrap} />
           <IconButton label="Poll status" icon={<Clock3 className="h-4 w-4" />} onClick={actions.pollEnrollment} />
           <IconButton label="Enroll" icon={<CheckCircle2 className="h-4 w-4" />} onClick={actions.enroll} />
@@ -320,11 +330,11 @@ function ControlPanel({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
+      <div className="mt-3 grid gap-2 md:grid-cols-2">
         <label className="text-xs font-medium text-slate-600">
           Serial Number
           <input
-            className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+            className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-xs"
             value={device.serialNumber}
             onChange={(event) =>
               updateDevice(device.id, {
@@ -337,17 +347,17 @@ function ControlPanel({
         <label className="text-xs font-medium text-slate-600">
           Onboarding Token
           <input
-            className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+            className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-xs"
             value={device.onboardingToken}
             onChange={(event) => updateDevice(device.id, { onboardingToken: event.target.value })}
           />
         </label>
       </div>
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
         <IconButton label="Send health" icon={<Activity className="h-4 w-4" />} onClick={actions.health} disabled={!canUseToken} />
         <IconButton label="Poll REST" icon={<Server className="h-4 w-4" />} onClick={actions.pollCommandsNow} disabled={!canUseToken} />
-        <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700">
+        <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700">
           <FileUp className="h-4 w-4" />
           Upload
           <input
@@ -362,14 +372,14 @@ function ControlPanel({
         </label>
       </div>
 
-      <div className="mt-5 rounded-md border border-slate-200 bg-slate-50 p-3">
-        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-2.5">
+        <div className="mb-2 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
             <TerminalSquare className="h-4 w-4" />
-            Simulated Command
+            Command
           </div>
           <select
-            className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+            className="max-w-[190px] rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs"
             value={selectedCommand}
             onChange={(event) => updateCommand(event.target.value)}
           >
@@ -381,11 +391,11 @@ function ControlPanel({
           </select>
         </div>
         <textarea
-          className="h-40 w-full resize-none rounded-md border border-slate-200 bg-white p-3 font-mono text-xs leading-5 text-slate-800"
+          className="h-28 w-full resize-none rounded-md border border-slate-200 bg-white p-2.5 font-mono text-xs leading-5 text-slate-800"
           value={payloadText}
           onChange={(event) => setPayloadText(event.target.value)}
         />
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
           <IconButton
             label="Run as REST"
             icon={<Send className="h-4 w-4" />}
@@ -401,10 +411,8 @@ function ControlPanel({
 
 function CommandHistory({ device }: { device: DeviceProfile }) {
   return (
-    <section className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="mb-3 text-sm font-semibold text-slate-900">Command History</h2>
-      <div className="max-h-72 overflow-auto scrollbar-thin">
-        <table className="w-full min-w-[620px] text-left text-sm">
+    <div className="h-full overflow-auto scrollbar-thin">
+        <table className="w-full min-w-[360px] text-left text-xs">
           <thead className="sticky top-0 bg-white text-xs uppercase text-slate-500">
             <tr>
               <th className="py-2 pr-3">Source</th>
@@ -433,18 +441,15 @@ function CommandHistory({ device }: { device: DeviceProfile }) {
             ) : null}
           </tbody>
         </table>
-      </div>
-    </section>
+    </div>
   );
 }
 
 function LogPanel({ device }: { device: DeviceProfile }) {
   return (
-    <section className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="mb-3 text-sm font-semibold text-slate-900">Agent Log</h2>
-      <div className="max-h-80 space-y-2 overflow-auto scrollbar-thin">
+      <div className="h-full space-y-2 overflow-auto pr-1 scrollbar-thin">
         {device.logs.map((log) => (
-          <div key={log.id} className="rounded-md border border-slate-100 p-3">
+          <div key={log.id} className="rounded-md border border-slate-100 p-2.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className={`rounded-full px-2 py-1 text-xs font-semibold ${logTone[log.level]}`}>{log.level}</span>
               <span className="text-xs text-slate-500">{relativeDate(log.tsIso)}</span>
@@ -454,6 +459,40 @@ function LogPanel({ device }: { device: DeviceProfile }) {
           </div>
         ))}
       </div>
+  );
+}
+
+function ActivityPanel({
+  device,
+  activityTab,
+  setActivityTab,
+}: {
+  device: DeviceProfile;
+  activityTab: "history" | "logs";
+  setActivityTab: (tab: "history" | "logs") => void;
+}) {
+  return (
+    <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] rounded-md border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold text-slate-900">Activity</h2>
+        <div className="grid grid-cols-2 rounded-md bg-slate-100 p-1 text-xs font-semibold">
+          <button
+            type="button"
+            onClick={() => setActivityTab("history")}
+            className={`rounded px-3 py-1.5 ${activityTab === "history" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500"}`}
+          >
+            History
+          </button>
+          <button
+            type="button"
+            onClick={() => setActivityTab("logs")}
+            className={`rounded px-3 py-1.5 ${activityTab === "logs" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500"}`}
+          >
+            Logs
+          </button>
+        </div>
+      </div>
+      <div className="min-h-0 overflow-hidden">{activityTab === "history" ? <CommandHistory device={device} /> : <LogPanel device={device} />}</div>
     </section>
   );
 }
@@ -463,7 +502,7 @@ function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string;
     <div className="flex items-start gap-3">
       <span className="mt-0.5 text-slate-500">{icon}</span>
       <div className="min-w-0">
-        <div className="text-xs uppercase text-slate-500">{label}</div>
+        <div className="text-[11px] uppercase text-slate-500">{label}</div>
         <div className="break-all font-mono text-xs text-slate-900">{value}</div>
       </div>
     </div>
@@ -486,7 +525,7 @@ function IconButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45"
+      className="inline-flex items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45"
       title={label}
     >
       {icon}

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const DEFAULT_MQTT_URL = "ws://localhost:8083/mqtt";
+
 const boolString = z
   .string()
   .optional()
@@ -17,7 +19,7 @@ const numberString = (fallback: number) =>
 const envSchema = z.object({
   mdmHost: z.string().url().default("http://localhost:8080"),
   uploadHost: z.string().url().default("http://localhost:8080"),
-  mqttUrl: z.string().default("ws://localhost:8083/mqtt"),
+  mqttUrl: z.string().default(DEFAULT_MQTT_URL),
   mqttUsername: z.string().optional().default(""),
   mqttPassword: z.string().optional().default(""),
   mockMode: boolString.default(true),

@@ -84,6 +84,10 @@ export function createDevice(index = 1): DeviceProfile {
     },
     locked: false,
     activeApp: "com.miniatm.app",
+    notifications: [],
+    screenSharing: false,
+    mediaPlaying: false,
+    mqttConnected: false,
     preferences: {
       terminal_interval: appConfig.defaultPollIntervalSec,
     },

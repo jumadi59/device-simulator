@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { appConfig } from "./config";
+import { appConfig, DEFAULT_MQTT_URL } from "./config";
 import { createDevice, randomId } from "./device-factory";
 import type { CommandStatus, DeviceLog, DeviceProfile, DeviceConnectionState, LogLevel, SimulatedCommand } from "./types";
 
@@ -27,6 +27,29 @@ type SimulatorState = {
 };
 
 const initialDevice = createDevice(1);
+
+function isStaleDefaultMqttHost(host?: string) {
+  if (!host) return true;
+  return host === DEFAULT_MQTT_URL || /^wss?:\/\/localhost(?::\d+)?(?:\/.*)?$/i.test(host) || /^mqtts?:\/\/localhost(?::\d+)?(?:\/.*)?$/i.test(host);
+}
+
+function normalizePersistedDevice(device: DeviceProfile): DeviceProfile {
+  const shouldUseEnvMqtt = isStaleDefaultMqttHost(device.mqtt?.host);
+  return {
+    ...device,
+    mqtt: {
+      ...device.mqtt,
+      host: shouldUseEnvMqtt ? appConfig.mqttUrl : device.mqtt?.host,
+      clientId: device.mqtt?.clientId || device.serialNumber,
+      username: device.mqtt?.username || appConfig.mqttUsername || "",
+      password: device.mqtt?.password || appConfig.mqttPassword || "",
+    },
+    notifications: device.notifications ?? [],
+    screenSharing: device.screenSharing ?? false,
+    mediaPlaying: device.mediaPlaying ?? false,
+    mqttConnected: false,
+  };
+}
 
 export const useSimulatorStore = create<SimulatorState>()(
   persist(
@@ -141,6 +164,19 @@ export const useSimulatorStore = create<SimulatorState>()(
     }),
     {
       name: "mdm-agent-simulator",
+      merge: (persisted, current) => {
+        const persistedState = persisted as Partial<SimulatorState> | undefined;
+        const devices = persistedState?.devices?.length ? persistedState.devices.map(normalizePersistedDevice) : current.devices;
+        return {
+          ...current,
+          ...persistedState,
+          devices,
+          activeDeviceId: devices.some((device) => device.id === persistedState?.activeDeviceId) ? persistedState!.activeDeviceId! : devices[0].id,
+          mockMode: persistedState?.mockMode ?? appConfig.mockMode,
+          pollIntervalSec: persistedState?.pollIntervalSec ?? appConfig.defaultPollIntervalSec,
+          healthIntervalSec: persistedState?.healthIntervalSec ?? appConfig.defaultHealthIntervalSec,
+        };
+      },
       partialize: (state) => ({
         devices: state.devices,
         activeDeviceId: state.activeDeviceId,

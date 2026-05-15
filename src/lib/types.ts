@@ -59,6 +59,10 @@ export type DeviceProfile = {
   mqtt: MqttConfig;
   locked: boolean;
   activeApp?: string;
+  notifications: DeviceNotification[];
+  screenSharing: boolean;
+  mediaPlaying: boolean;
+  mqttConnected: boolean;
   preferences: Record<string, unknown>;
   metrics: HealthPayload["payload"];
   lastHealthAt?: string;
@@ -66,6 +70,15 @@ export type DeviceProfile = {
   lastMqttAt?: string;
   logs: DeviceLog[];
   commandHistory: SimulatedCommand[];
+};
+
+export type DeviceNotification = {
+  id: string;
+  title: string;
+  message: string;
+  content?: string;
+  createdAtIso: string;
+  source: "mqtt" | "rest" | "manual";
 };
 
 export type HealthPayload = {
