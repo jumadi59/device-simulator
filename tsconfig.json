@@ -1,13 +1,23 @@
 {
   "compilerOptions": {
-    "target": "ES2020",                   // Target output JS
-    "module": "CommonJS",                 // Modul system Node.js
-    "strict": true,                       // Strict type checking
-    "esModuleInterop": true,              // Interop default export
-    "outDir": "dist",                     // Hasil kompilasi JS
-    "rootDir": "src",                     // Direktori kode TS
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": false,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
-    "skipLibCheck": true
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [{ "name": "next" }],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
-  "include": ["src/**/*"]
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
 }
